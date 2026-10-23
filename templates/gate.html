@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ticketbox Event Manager - Cổng Soát Vé Check-in</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .gate-stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--tb-card-bg);
+      border: 1px solid var(--tb-border);
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--tb-green);
+      margin-top: 4px;
+    }
+    .scanner-box {
+      background: #141820;
+      border: 2px dashed #30363d;
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .scan-result-card {
+      padding: 24px;
+      border-radius: 12px;
+      font-size: 20px;
+      font-weight: 800;
+      margin-top: 20px;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .scan-result-card.ok {
+      background-color: #0f5132;
+      color: #d1e7dd;
+      border: 2px solid #198754;
+    }
+    .scan-result-card.err {
+      background-color: #842029;
+      color: #f8d7da;
+      border: 2px solid #dc3545;
+    }
+    .scan-input-area {
+      width: 100%;
+      max-width: 500px;
+      background: #21262d;
+      border: 1px solid var(--tb-border);
+      color: #fff;
+      font-family: monospace;
+      font-size: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      margin: 12px auto;
+      display: block;
+      outline: none;
+    }
+    .scan-input-area:focus {
+      border-color: var(--tb-green);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER EVENT MANAGER -->
+  <header class="tb-header">
+    <div class="tb-logo" onclick="window.location.href='/'">
+      ticket<span class="tb-box">box</span>
+      <span class="badge-shield">⚡ EVENT MANAGER SOÁT VÉ</span>
+    </div>
+    <div style="margin-left: auto; display: flex; gap: 12px;">
+      <a href="/" class="btn-secondary">🏠 Về Trang Chủ Ticketbox</a>
+      <button class="btn-outline-green" onclick="loadStatsAndLogs()">🔄 Cập nhật dữ liệu</button>
+    </div>
+  </header>
+
+  <main class="tb-container">
+    <div class="section-header" style="margin-top: 10px;">
+      <div>
+        <h1 style="font-size: 24px; font-weight: 800; color: #fff;">Hệ Thống Soát Vé Cổng Điện Tử (Turnstile Gate)</h1>
+        <p style="color: var(--tb-text-muted); font-size: 13px;">
+          Xác thực mã QR động TOTP thời gian thực · Tự động phát hiện ảnh chụp màn hình cũ & ngăn chặn vé đã sử dụng
+        </p>
+      </div>
+    </div>
+
+    <!-- THỐNG KÊ SOÁT VÉ -->
+    <div class="gate-stats-bar">
+      <div class="stat-card">
+        <div style="color: var(--tb-text-muted); font-size: 12px; font-weight: 600;">TỔNG VÉ PHÁT HÀNH</div>
+        <div class="stat-val" id="stat-total">--</div>
+      </div>
+      <div class="stat-card">
+        <div style="color: var(--tb-text-muted); font-size: 12px; font-weight: 600;">ĐÃ QUA CỔNG HỢP LỆ</div>
+        <div class="stat-val" style="color: var(--tb-green);" id="stat-used">--</div>
+      </div>
+      <div class="stat-card">
+        <div style="color: var(--tb-text-muted); font-size: 12px; font-weight: 600;">DOANH THU ĐÃ THU</div>
+        <div class="stat-val" style="color: #ffd700;" id="stat-revenue">--</div>
+      </div>
+      <div class="stat-card">
+        <div style="color: var(--tb-text-muted); font-size: 12px; font-weight: 600;">SỰ CỐ AN NINH BỊ CHẶN</div>
+        <div class="stat-val" style="color: var(--tb-danger);" id="stat-threats">--</div>
+      </div>
+    </div>
+
+    <!-- MÁY SOÁT VÉ -->
+    <div class="scanner-box">
+      <div style="font-size: 40px; margin-bottom: 8px;">📷</div>
+      <h2 style="font-size: 18px; color: #fff; margin-bottom: 6px;">MÁY QUÉT MÃ QR CỔNG CONCERT</h2>
+      <p style="color: var(--tb-text-muted); font-size: 13px; max-width: 500px; margin: 0 auto;">
+        Dán chuỗi mã QR từ mục <b>"Vé của tôi"</b> (dạng: <code>MÃ_VÉ:MÃ_TOTP</code>) để mô phỏng tia laser máy quét tại cổng soát vé.
+      </p>
+
+      <input type="text" id="qr-input" class="scan-input-area" placeholder="ví dụ: TK-SAMPLE-8888:123456" autofocus>
+
+      <div style="margin-top: 14px; display: flex; justify-content: center; gap: 10px;">
+        <button class="btn-primary" style="padding: 12px 36px; font-size: 16px;" onclick="verifyGateCode()">
+          ⚡ Xác thực & Mở Cổng
+        </button>
+        <button class="btn-secondary" onclick="document.getElementById('qr-input').value = ''">
+          Xóa trắng
+        </button>
+      </div>
+
+      <!-- KẾT QUẢ SOÁT VÉ TRỰC QUAN -->
+      <div id="gate-result" class="scan-result-card"></div>
+    </div>
+
+    <!-- AUDIT LOG TẠI CỔNG -->
+    <div class="tb-card">
+      <div class="section-header">
+        <h3 class="section-title">Nhật ký Soát vé & Cảnh báo an ninh cổng (Audit Log)</h3>
+        <span style="color: var(--tb-text-muted); font-size: 12px;">Cập nhật tự động mỗi 3 giây</span>
+      </div>
+
+      <div class="audit-table-container">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th>Giờ</th>
+              <th>IP Thiết Bị</th>
+              <th>Sự kiện</th>
+              <th>Mức độ</th>
+              <th>Nội dung chi tiết</th>
+            </tr>
+          </thead>
+          <tbody id="gate-audit-body">
+            <tr><td colspan="5" style="text-align:center; color:var(--tb-text-muted);">Đang tải dữ liệu...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    async function verifyGateCode() {
+      const payload = document.getElementById('qr-input').value.trim();
+      const resultBox = document.getElementById('gate-result');
+
+      if (!payload) {
+        resultBox.className = 'scan-result-card err';
+        resultBox.style.display = 'block';
+        resultBox.textContent = '❌ Vui lòng nhập hoặc dán nội dung mã QR!';
+        return;
+      }
+
+      try {
+        const resp = await fetch('/api/gate/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: payload })
+        });
+        const data = await resp.json();
+
+        resultBox.style.display = 'block';
+        if (data.ok) {
+          resultBox.className = 'scan-result-card ok';
+          resultBox.innerHTML = `
+            <div>✅ ${data.msg}</div>
+            <div style="font-size: 14px; font-weight: normal; margin-top: 8px;">
+              Khách hàng: <b>${data.owner_name}</b> | Hạng vé: <b>${data.type_name}</b> | Mã vé: <b>${data.ticket_id}</b>
+            </div>
+          `;
+        } else {
+          resultBox.className = 'scan-result-card err';
+          resultBox.innerHTML = `<div>❌ ${data.msg}</div>`;
+        }
+
+        loadStatsAndLogs();
+      } catch (e) {
+        resultBox.className = 'scan-result-card err';
+        resultBox.style.display = 'block';
+        resultBox.textContent = '❌ Lỗi kết nối hệ thống kiểm soát vé!';
+      }
+    }
+
+    // Nhấn Enter để quét vé nhanh
+    document.getElementById('qr-input').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        verifyGateCode();
+      }
+    });
+
+    async function loadStatsAndLogs() {
+      // 1. Thống kê
+      try {
+        const rStats = await fetch('/api/stats');
+        const dStats = await rStats.json();
+        if (dStats.ok) {
+          document.getElementById('stat-total').textContent = dStats.total_tickets;
+          document.getElementById('stat-used').textContent = dStats.used_tickets;
+          document.getElementById('stat-revenue').textContent = (dStats.revenue || 0).toLocaleString('vi-VN') + ' đ';
+          document.getElementById('stat-threats').textContent = dStats.threats_blocked;
+        }
+      } catch (e) {}
+
+      // 2. Audit log
+      try {
+        const rLogs = await fetch('/api/audit');
+        const dLogs = await rLogs.json();
+        const tbody = document.getElementById('gate-audit-body');
+        if (dLogs.ok && dLogs.logs) {
+          tbody.innerHTML = dLogs.logs.map(log => `
+            <tr>
+              <td style="font-family:monospace; color:#c9d1d9;">${log.ts}</td>
+              <td style="font-family:monospace; color:var(--tb-text-muted);">${log.ip}</td>
+              <td style="font-weight:700; color:#fff;">${log.event}</td>
+              <td><span class="badge-sev ${log.severity}">${log.severity}</span></td>
+              <td style="color:#e6edf3;">${log.detail}</td>
+            </tr>
+          `).join('');
+        }
+      } catch (e) {}
+    }
+
+    loadStatsAndLogs();
+    setInterval(loadStatsAndLogs, 3000);
+  </script>
+</body>
+</html>
